@@ -233,4 +233,3 @@ PUT	/admin/users/:id/role	Updates a specific user's role.
 DELETE	/admin/users/:id	Deletes a user from the database.
 GET	/reports/admin/all	Gets a paginated list of all reports from all users.
 
-Export to Sheets
