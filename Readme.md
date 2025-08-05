@@ -204,7 +204,6 @@ POST	/auth/login	Logs in a user and returns a JWT.
 POST	/auth/logout	Logs out the user (client should delete token).
 GET	/auth/me	Gets the profile of the currently logged-in user.
 
-Export to Sheets
 User
 Requires authentication.
 
@@ -212,7 +211,6 @@ Method	Endpoint	Description
 GET	/user/dashboard	Fetches statistics for the user dashboard.
 PUT	/user/profile	Updates the user's JSON profile data.
 
-Export to Sheets
 Reports
 Requires authentication.
 
@@ -222,7 +220,6 @@ GET	/reports/my-reports	Fetches a paginated list of the user's reports.
 GET	/reports/:id	Retrieves a single report's full details and analysis.
 GET	/reports/:id/status	Checks the current analysis status of a report.
 
-Export to Sheets
 Admin
 Requires ADMIN role authentication.
 
