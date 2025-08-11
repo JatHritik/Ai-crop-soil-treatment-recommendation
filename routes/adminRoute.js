@@ -1,5 +1,3 @@
-// routes/admin.js
-// ===============================
 const express = require('express');
 const { authenticateToken, requireAdmin } = require('../middleware/auth.js');
 const prisma = require('../config/db.js');

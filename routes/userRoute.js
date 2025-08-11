@@ -1,4 +1,3 @@
-// routes/user.js
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth.js');
 const prisma = require('../config/db.js');

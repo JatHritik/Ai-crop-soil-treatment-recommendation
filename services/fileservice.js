@@ -1,5 +1,3 @@
-// services/fileProcessor.js
-// ===============================
 const fs = require('fs').promises;
 const pdfParse = require('pdf-parse');
 const path = require('path');
