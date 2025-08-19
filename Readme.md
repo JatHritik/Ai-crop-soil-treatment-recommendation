@@ -133,7 +133,7 @@ Create a .env file in the root of the project by copying the example below.
 
 Update the DATABASE_URL with your PostgreSQL credentials.
 
-Add your OPENAI_API_KEY.
+Add your GEMINI_API_KEY.
 
 Initialize Prisma and sync the database:
 
@@ -159,7 +159,7 @@ To start the server in development mode with live-reloading:
 Bash
 
 npm run dev
-The server will be running at http://localhost:3000.
+The server will be running at http://localhost:5000.
 
 Environment Variables
 Create a .env file in the root directory and add the following variables:
