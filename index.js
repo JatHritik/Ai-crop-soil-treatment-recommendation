@@ -37,7 +37,7 @@ app.use('/uploads', express.static('uploads'));
 
 // Routes
 app.use('/auth', authRoutes); //register login & logout user & admin 
-app.use('user', userRoutes); // only user route 
+app.use('/user', userRoutes); // only user route 
 app.use('/admin', adminRoutes); // only admin route
 app.use('/reports', reportRoutes); // for admin &  user report management
 
