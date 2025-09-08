@@ -1,21 +1,23 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs').promises;
+const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 const prisma = require('../config/db.js');
 const { authenticateToken, requireAdmin } = require('../middleware/auth.js');
-const { analyzeWithAI } = require('../services/aiService.js');
+const { analyzeWithAI, getDetailedRecommendations } = require('../services/aiService.js');
 const { processFile } = require('../services/fileservice.js');
 
 const router = express.Router();
 
 // File upload configuration
 const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
+  destination: (req, file, cb) => {
     const uploadDir = 'uploads/reports';
     try {
-      await fs.mkdir(uploadDir, { recursive: true });
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
       cb(null, uploadDir);
     } catch (error) {
       cb(error);
@@ -51,12 +53,20 @@ router.post('/upload', authenticateToken, upload.single('reportFile'), [
   body('season').isIn(['KHARIF', 'RABI', 'ZAID'])
 ], async (req, res) => {
   try {
+    console.log('Upload request received:', {
+      body: req.body,
+      file: req.file ? { name: req.file.originalname, size: req.file.size } : null,
+      user: req.user ? { id: req.user.id } : null
+    });
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
     if (!req.file) {
+      console.log('No file uploaded');
       return res.status(400).json({ error: 'Report file is required' });
     }
 
@@ -212,6 +222,14 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Report not found' });
     }
 
+    console.log('Report data being sent:', {
+      id: report.id,
+      status: report.status,
+      hasAiAnalysis: !!report.aiAnalysis,
+      aiAnalysisType: typeof report.aiAnalysis,
+      aiAnalysisKeys: report.aiAnalysis ? Object.keys(report.aiAnalysis) : null
+    });
+
     res.json({ report });
   } catch (error) {
     console.error('Get report error:', error);
@@ -247,6 +265,50 @@ router.get('/:id/status', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Status check error:', error);
     res.status(500).json({ error: 'Failed to check status' });
+  }
+});
+
+// Delete report
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    console.log('Delete request received for report ID:', req.params.id);
+    console.log('User ID:', req.user.id);
+    
+    const report = await prisma.soilReport.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user.id
+      }
+    });
+
+    console.log('Report found:', !!report);
+
+    if (!report) {
+      console.log('Report not found or not owned by user');
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    // Delete the report file from filesystem
+    if (report.reportFile && fs.existsSync(report.reportFile)) {
+      try {
+        fs.unlinkSync(report.reportFile);
+        console.log(`Deleted file: ${report.reportFile}`);
+      } catch (fileError) {
+        console.error('Error deleting file:', fileError);
+        // Continue with database deletion even if file deletion fails
+      }
+    }
+
+    // Delete the report from database
+    await prisma.soilReport.delete({
+      where: { id: req.params.id }
+    });
+
+    console.log(`✅ Report ${req.params.id} deleted successfully`);
+    res.json({ message: 'Report deleted successfully' });
+  } catch (error) {
+    console.error('Delete report error:', error);
+    res.status(500).json({ error: 'Failed to delete report' });
   }
 });
 
@@ -286,6 +348,66 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Admin get reports error:', error);
     res.status(500).json({ error: 'Failed to get reports' });
+  }
+});
+
+// Get detailed recommendations for a report
+router.get('/:id/detailed-recommendations', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get the report
+    const report = await prisma.soilReport.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: { id: true, username: true, email: true }
+        }
+      }
+    });
+
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    // Check if user owns the report or is admin
+    if (report.userId !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (!report.aiAnalysis) {
+      return res.status(400).json({ error: 'AI analysis not available for this report' });
+    }
+
+    // Get detailed recommendations
+    const location = {
+      district: report.district,
+      state: report.state,
+      area: report.area
+    };
+
+    const detailedRecommendations = await getDetailedRecommendations(
+      report.aiAnalysis,
+      location,
+      report.season
+    );
+
+    console.log(`✅ Detailed recommendations generated for report ${id}`);
+    res.json({
+      success: true,
+      recommendations: detailedRecommendations,
+      reportInfo: {
+        id: report.id,
+        district: report.district,
+        state: report.state,
+        area: report.area,
+        season: report.season
+      }
+    });
+
+  } catch (error) {
+    console.error('Detailed recommendations error:', error);
+    res.status(500).json({ error: 'Failed to get detailed recommendations' });
   }
 });
 

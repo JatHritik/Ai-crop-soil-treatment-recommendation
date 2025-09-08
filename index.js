@@ -1,9 +1,11 @@
+// index.js — slimmed
+
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const path = require('path');
-require('dotenv').config();
+const morgan = require('morgan');
 
 const authRoutes = require('./routes/auth.js');
 const userRoutes = require('./routes/userRoute.js');
@@ -13,57 +15,91 @@ const reportRoutes = require('./routes/reportRoute.js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? 'your-frontend-domain.com' : '*',
-  credentials: true
-}));
+// If behind a proxy (Netlify/Vercel/Nginx), keep this:
+app.set('trust proxy', 1);
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
-  message: 'Too many requests from this IP, please try again later.'
-});
-app.use(limiter);
+// Logging
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// Body parsing middleware
+// Security
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// CORS
+app.use(
+  cors({
+    origin : ["http://localhost:5173", "http://127.0.0.1:5173", "http://192.168.1.218:5173"],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-ID'],
+  })
+);
+
+// Body parsers
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static files
+// Static (keep if you actually serve uploads)
 app.use('/uploads', express.static('uploads'));
 
 // Routes
-app.use('/auth', authRoutes); //register login & logout user & admin 
-app.use('/user', userRoutes); // only user route 
-app.use('/admin', adminRoutes); // only admin route
-app.use('/reports', reportRoutes); // for admin &  user report management
+app.use('/auth', authRoutes);
+app.use('/user', userRoutes);
+app.use('/admin', adminRoutes);
+app.use('/reports', reportRoutes);
 
-// Health check
+// Health
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.status(200).json({ status: 'OK', uptime: process.uptime() });
 });
 
-// Error handling middleware
+// 404
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found', path: req.originalUrl });
+});
+
+// Error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
-    error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  const isDev = process.env.NODE_ENV !== 'production';
+  const requestId = req.headers['x-request-id'] || 'unknown';
+
+  console.error(`[${requestId}]`, err);
+
+  res.status(err.status || 500).json({
+    error: 'Internal server error',
+    requestId,
+    ...(isDev && { message: err.message, stack: err.stack }),
   });
 });
 
-
-
-//dont use this code khi pr vi 
-// // 404 handler
-// app.use('*', (req, res) => {
-//   res.status(404).json({ error: 'Route not found' });
-// });
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
+// Start
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
+
+// Graceful shutdown
+const shutdown = (signal) => {
+  console.log(`🛑 ${signal} received. Shutting down...`);
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('❌ Forced shutdown');
+    process.exit(1);
+  }, 30000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

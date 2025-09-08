@@ -8,19 +8,36 @@ const { authenticateToken } = require('../middleware/auth.js');
 const router = express.Router();
 
 // Register
-router.post('/register', [
-  body('username').isLength({ min: 3 }).trim(),
-  body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 6 }),
-  body('role').optional().isIn(['ADMIN', 'USER'])
-], async (req, res) => {
+console.log('Register route handler defined');
+router.post('/register', async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    console.log('=== REGISTRATION REQUEST START ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Request method:', req.method);
+    console.log('Request URL:', req.url);
+    console.log('=== REGISTRATION REQUEST END ===');
+    
+    // Manual validation
+    const { username, email: rawEmail, password, role = 'USER', profile } = req.body;
+    
+    if (!username || username.length < 3) {
+      console.log('Validation error: Username too short');
+      return res.status(400).json({ error: 'Username must be at least 3 characters' });
     }
-
-    const { username, email, password, role = 'USER', profile } = req.body;
+    
+    if (!rawEmail || !rawEmail.includes('@')) {
+      console.log('Validation error: Invalid email');
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+    
+    if (!password || password.length < 6) {
+      console.log('Validation error: Password too short');
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    
+    // Normalize email manually
+    const email = rawEmail.toLowerCase().trim();
 
     const existingUser = await prisma.user.findFirst({
       where: {
@@ -28,7 +45,10 @@ router.post('/register', [
       }
     });
 
+    console.log('Checking for existing user:', { email, username, existingUser });
+
     if (existingUser) {
+      console.log('User already exists:', existingUser);
       return res.status(400).json({ error: 'User already exists with this email or username' });
     }
 
