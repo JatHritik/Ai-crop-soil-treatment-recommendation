@@ -55,6 +55,7 @@ model SoilReport {
 enum Role {
   ADMIN
   USER
+  FARMER
 }
 
 enum Season {

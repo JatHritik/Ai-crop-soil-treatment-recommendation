@@ -39,6 +39,23 @@ router.post('/register', async (req, res) => {
     // Normalize email manually
     const email = rawEmail.toLowerCase().trim();
 
+    // Check if trying to register as ADMIN
+    if (role === 'ADMIN') {
+      // Count existing administrators
+      const adminCount = await prisma.user.count({
+        where: { role: 'ADMIN' }
+      });
+      
+      console.log('Current admin count:', adminCount);
+      
+      if (adminCount >= 2) {
+        console.log('Admin limit reached. Cannot register more administrators.');
+        return res.status(400).json({ 
+          error: 'Administrator limit reached. Only 2 administrators are allowed. Please register as USER or FARMER instead.' 
+        });
+      }
+    }
+
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [{ email }, { username }]
